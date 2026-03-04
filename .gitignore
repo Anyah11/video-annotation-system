@@ -1,0 +1,11 @@
+# Video files and extracted frames
+test_videos/*.mp4
+test_videos/*.avi
+test_videos/*.mov
+test_videos/*_frames/
+test_videos/annotations/
+test_videos/jobs/
+
+# Or simpler - ignore everything in test_videos except .gitkeep
+test_videos/*
+!test_videos/.gitkeep

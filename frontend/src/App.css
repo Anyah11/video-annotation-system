@@ -1,0 +1,228 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: #0f0f1e;
+  color: #e2e8f0;
+}
+
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.app-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px 30px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.app-header h1 {
+  font-size: 28px;
+  margin-bottom: 5px;
+  color: white;
+}
+
+.app-header p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Container */
+.app-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 350px;
+  background: #1a1a2e;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar h2 {
+  padding: 20px;
+  font-size: 18px;
+  color: #cbd5e0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.video-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.video-item {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.video-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(5px);
+}
+
+.video-item.active {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+}
+
+.video-icon {
+  font-size: 32px;
+  margin-right: 15px;
+}
+
+.video-info {
+  flex: 1;
+}
+
+.video-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.video-size {
+  font-size: 12px;
+  color: #a0aec0;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  background: #16213e;
+}
+
+.video-player-container h2 {
+  color: #cbd5e0;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.video-player {
+  width: 100%;
+  max-width: 1200px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: black;
+}
+
+.video-details {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  max-width: 1200px;
+}
+
+.video-details p {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #cbd5e0;
+}
+
+.video-details strong {
+  color: #667eea;
+  margin-right: 10px;
+}
+
+/* No Video Selected */
+.no-video {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #a0aec0;
+}
+
+.no-video h2 {
+  font-size: 32px;
+  margin-bottom: 10px;
+  color: #cbd5e0;
+}
+
+/* Loading & Error States */
+.loading, .error {
+  padding: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.error {
+  color: #fc8181;
+  background: rgba(252, 129, 129, 0.1);
+  border-radius: 8px;
+  margin: 10px;
+}
+
+/* Scrollbar Styling */
+.video-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.video-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.video-list::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.5);
+  border-radius: 4px;
+}
+
+.video-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.7);
+}
+
+/* Mode Switcher */
+.mode-switcher {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.mode-switcher button {
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-switcher button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.mode-switcher button.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-color: #667eea;
+}

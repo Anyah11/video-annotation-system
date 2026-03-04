@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Player Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+        }
+        h1 {
+            color: #667eea;
+        }
+        video {
+            width: 100%;
+            max-width: 800px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        select, button {
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px 5px;
+            border-radius: 5px;
+            border: none;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+        }
+        select {
+            background: #764ba2;
+        }
+        .info {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎥 Video Streaming Test</h1>
+    
+    <div class="info">
+        <h3>Available Videos:</h3>
+        <div id="videoList">Loading...</div>
+    </div>
+    
+    <div class="controls">
+        <select id="videoSelect">
+            <option>Select a video...</option>
+        </select>
+        <button onclick="loadVideo()">Load Video</button>
+    </div>
+    
+    <video id="videoPlayer" controls preload="metadata">
+    <source id="videoSource" type="video/mp4">
+    Your browser doesn't support video playback.
+</video>
+    
+    <div class="info">
+        <p id="status">Select a video to start playing</p>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        
+        // Load list of available videos
+        async function loadVideoList() {
+            try {
+                const response = await fetch(`${API_BASE}/api/videos`);
+                const data = await response.json();
+                
+                const videoSelect = document.getElementById('videoSelect');
+                const videoList = document.getElementById('videoList');
+                
+                // Clear existing options
+                videoSelect.innerHTML = '<option>Select a video...</option>';
+                
+                // Add videos to dropdown and list
+                let listHTML = '<ul>';
+                data.videos.forEach(video => {
+                    const option = document.createElement('option');
+                    option.value = video.filename;
+                    option.textContent = `${video.filename} (${video.size_mb} MB)`;
+                    videoSelect.appendChild(option);
+                    
+                    listHTML += `<li>${video.filename} - ${video.size_mb} MB</li>`;
+                });
+                listHTML += '</ul>';
+                videoList.innerHTML = listHTML;
+                
+                document.getElementById('status').textContent = `Found ${data.count} videos`;
+            } catch (error) {
+                console.error('Error loading videos:', error);
+                document.getElementById('status').textContent = 'Error loading videos';
+            }
+        }
+        
+        // Load and play selected video
+        function loadVideo() {
+    const videoSelect = document.getElementById('videoSelect');
+    const filename = videoSelect.value;
+    
+    if (filename === 'Select a video...') {
+        alert('Please select a video first');
+        return;
+    }
+    
+    const videoPlayer = document.getElementById('videoPlayer');
+    const videoSource = document.getElementById('videoSource');
+    
+    // Set the source
+    videoSource.src = `${API_BASE}/api/stream/${filename}`;
+    
+    // Reload the video player
+    videoPlayer.load();
+    videoPlayer.play();
+    
+    document.getElementById('status').textContent = `Now playing: ${filename}`;
+}
+        
+        // Load video list on page load
+        loadVideoList();
+    </script>
+</body>
+</html>
