@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 import aiofiles
@@ -10,21 +10,9 @@ import shutil
 import threading
 import time
 from datetime import datetime
-from sqlalchemy.orm import Session
-import json
-
-# Database imports
-from database import get_db, init_db
-from models import Video, Annotation, Job
 
 # Create the FastAPI application
 app = FastAPI(title="Video Annotation Backend")
-
-# Initialize database on startup
-@app.on_event("startup")
-def startup_event():
-    init_db()
-    print("✅ Database initialized!")
 
 # Allow frontend to connect (CORS)
 app.add_middleware(
@@ -58,7 +46,7 @@ def read_root():
     return {
         "message": "Video Annotation Backend is running!",
         "status": "online",
-        "version": "0.3.0 - PostgreSQL Edition"
+        "version": "0.2.0"  # Updated version!
     }
 
 # Health check endpoint
@@ -66,9 +54,22 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
+# API info endpoint
+@app.get("/api/info")
+def api_info():
+    return {
+        "project": "GPU-Enabled Video Annotation System",
+        "endpoints": [
+            "/",
+            "/health", 
+            "/api/info",
+            "/docs"
+        ]
+    }
+
 # Endpoint to list all videos
 @app.get("/api/videos")
-def list_videos(db: Session = Depends(get_db)):
+def list_videos():
     """
     List all video files in the video directory
     Returns: List of video files with metadata
@@ -90,31 +91,12 @@ def list_videos(db: Session = Depends(get_db)):
             filepath = os.path.join(VIDEO_DIR, filename)
             file_stats = os.stat(filepath)
             
-            # Check if video exists in database
-            db_video = db.query(Video).filter(Video.filename == filename).first()
-            
-            # If not in DB, add it
-            if not db_video:
-                db_video = Video(
-                    filename=filename,
-                    filepath=filepath,
-                    size_bytes=file_stats.st_size,
-                    size_mb=round(file_stats.st_size / (1024 * 1024), 2)
-                )
-                db.add(db_video)
-                db.commit()
-                db.refresh(db_video)
-            
-            # Get annotation count from database
-            annotation_count = db.query(Annotation).filter(Annotation.video_id == db_video.id).count()
-            
             videos.append({
                 "filename": filename,
                 "path": filepath,
                 "size_bytes": file_stats.st_size,
                 "size_mb": round(file_stats.st_size / (1024 * 1024), 2),
-                "modified": file_stats.st_mtime,
-                "annotation_count": annotation_count
+                "modified": file_stats.st_mtime
             })
         
         return {
@@ -125,6 +107,35 @@ def list_videos(db: Session = Depends(get_db)):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Endpoint to get info about a specific video
+@app.get("/api/videos/{filename}")
+def get_video_info(filename: str):
+    """
+    Get detailed information about a specific video file
+    """
+    filepath = os.path.join(VIDEO_DIR, filename)
+    
+    # Check if file exists
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail=f"Video not found: {filename}")
+    
+    # Check if it's actually a video file
+    if not is_video_file(filename):
+        raise HTTPException(status_code=400, detail=f"File is not a video: {filename}")
+    
+    # Get file stats
+    file_stats = os.stat(filepath)
+    
+    return {
+        "filename": filename,
+        "path": filepath,
+        "size_bytes": file_stats.st_size,
+        "size_mb": round(file_stats.st_size / (1024 * 1024), 2),
+        "size_gb": round(file_stats.st_size / (1024 * 1024 * 1024), 2),
+        "modified": file_stats.st_mtime,
+        "exists": True
+    }
 
 # Endpoint to stream video file
 @app.get("/api/stream/{filename}")
@@ -196,9 +207,9 @@ async def stream_video(filename: str, request: Request):
         media_type='video/mp4'
     )
 
-# ASYNC FRAME EXTRACTION
+# ASYNC FRAME EXTRACTION - NEW VERSION!
 @app.post("/api/extract-frames/{filename}")
-async def extract_frames(filename: str, fps: int = 5, quality: int = 2, db: Session = Depends(get_db)):
+async def extract_frames(filename: str, fps: int = 5, quality: int = 2):
     """
     Start asynchronous frame extraction
     Returns immediately with a task ID
@@ -254,14 +265,17 @@ async def extract_frames(filename: str, fps: int = 5, quality: int = 2, db: Sess
 def extract_frames_background(filename: str, fps: int, quality: int, video_name: str):
     """
     Background thread function for frame extraction
+    This runs without blocking the server!
     """
     try:
         video_path = os.path.join(VIDEO_DIR, filename)
         frames_dir = os.path.join(VIDEO_DIR, f"{video_name}_frames")
         
+        # Update progress
         extraction_progress[video_name]['message'] = "Preparing directories..."
         extraction_progress[video_name]['progress'] = 5
         
+        # Remove old frames if they exist
         if os.path.exists(frames_dir):
             shutil.rmtree(frames_dir)
         
@@ -269,18 +283,21 @@ def extract_frames_background(filename: str, fps: int, quality: int, video_name:
         
         output_pattern = os.path.join(frames_dir, "frame_%04d.jpg")
         
+        # Update progress
         extraction_progress[video_name]['message'] = "Extracting frames with FFmpeg..."
         extraction_progress[video_name]['progress'] = 10
         
+        # FFmpeg command
         cmd = [
             'ffmpeg',
             '-i', video_path,
             '-vf', f'fps={fps}',
-            '-q:v', str(quality),
+            '-q:v', str(quality),  # User-configurable quality!
             output_pattern,
-            '-y'
+            '-y'  # Overwrite output files
         ]
         
+        # Run FFmpeg
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode != 0:
@@ -289,12 +306,15 @@ def extract_frames_background(filename: str, fps: int, quality: int, video_name:
             extraction_progress[video_name]['progress'] = 0
             return
         
+        # Update progress
         extraction_progress[video_name]['progress'] = 90
         extraction_progress[video_name]['message'] = "Counting frames..."
         
+        # Count extracted frames
         frames = [f for f in os.listdir(frames_dir) if f.endswith('.jpg')]
         frames.sort()
         
+        # Update progress - complete
         extraction_progress[video_name]['status'] = 'completed'
         extraction_progress[video_name]['progress'] = 100
         extraction_progress[video_name]['total_frames'] = len(frames)
@@ -310,7 +330,10 @@ def extract_frames_background(filename: str, fps: int, quality: int, video_name:
 
 @app.get("/api/extract-frames/{video_name}/progress")
 def get_extraction_progress(video_name: str):
-    """Get the progress of frame extraction"""
+    """
+    Get the progress of frame extraction for a video
+    Frontend polls this endpoint to update progress bar
+    """
     if video_name not in extraction_progress:
         return {
             "status": "not_started",
@@ -323,7 +346,9 @@ def get_extraction_progress(video_name: str):
 
 @app.get("/api/frames/{video_name}")
 def list_frames(video_name: str):
-    """List all extracted frames for a video"""
+    """
+    List all extracted frames for a video
+    """
     frames_dir = os.path.join(VIDEO_DIR, f"{video_name}_frames")
     
     if not os.path.exists(frames_dir):
@@ -342,7 +367,9 @@ def list_frames(video_name: str):
 
 @app.get("/api/frame-image/{video_name}/{frame_filename}")
 async def get_frame_image(video_name: str, frame_filename: str):
-    """Serve a specific frame image"""
+    """
+    Serve a specific frame image
+    """
     frames_dir = os.path.join(VIDEO_DIR, f"{video_name}_frames")
     frame_path = os.path.join(frames_dir, frame_filename)
     
@@ -351,125 +378,80 @@ async def get_frame_image(video_name: str, frame_filename: str):
     
     return FileResponse(frame_path, media_type="image/jpeg")
 
-# POSTGRESQL ANNOTATIONS - NEW!
 @app.post("/api/annotations/{video_name}")
-async def save_annotations(video_name: str, annotations: dict, db: Session = Depends(get_db)):
+async def save_annotations(video_name: str, annotations: dict):
     """
-    Save annotations for a video to PostgreSQL
+    Save annotations for a video
     """
+    annotations_dir = os.path.join(VIDEO_DIR, "annotations")
+    
+    # Create annotations directory if it doesn't exist
+    if not os.path.exists(annotations_dir):
+        os.makedirs(annotations_dir)
+    
+    # Save as JSON file
+    annotation_file = os.path.join(annotations_dir, f"{video_name}_annotations.json")
+    
     try:
-        # Get or create video record
-        video_filename = f"{video_name}.mp4"  # Assume .mp4, adjust if needed
-        db_video = db.query(Video).filter(Video.filename == video_filename).first()
-        
-        if not db_video:
-            # Create video record if it doesn't exist
-            video_path = os.path.join(VIDEO_DIR, video_filename)
-            if os.path.exists(video_path):
-                file_stats = os.stat(video_path)
-                db_video = Video(
-                    filename=video_filename,
-                    filepath=video_path,
-                    size_bytes=file_stats.st_size,
-                    size_mb=round(file_stats.st_size / (1024 * 1024), 2)
-                )
-                db.add(db_video)
-                db.commit()
-                db.refresh(db_video)
-            else:
-                raise HTTPException(status_code=404, detail="Video not found")
-        
-        # Delete existing annotations for this video
-        db.query(Annotation).filter(Annotation.video_id == db_video.id).delete()
-        
-        # Save new annotations
-        total_annotations = 0
-        for frame_idx, boxes in annotations.items():
-            frame_idx = int(frame_idx)
-            
-            for box in boxes:
-                annotation = Annotation(
-                    video_id=db_video.id,
-                    frame_index=frame_idx,
-                    annotation_type=box.get('type', 'box'),
-                    data=box
-                )
-                db.add(annotation)
-                total_annotations += 1
-        
-        db.commit()
+        import json
+        with open(annotation_file, 'w') as f:
+            json.dump(annotations, f, indent=2)
         
         return {
             "success": True,
-            "message": "Annotations saved to database",
-            "annotation_count": total_annotations
+            "message": "Annotations saved successfully",
+            "file": annotation_file,
+            "annotation_count": sum(len(boxes) for boxes in annotations.values())
         }
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/annotations/{video_name}")
-def load_annotations(video_name: str, db: Session = Depends(get_db)):
+def load_annotations(video_name: str):
     """
-    Load annotations for a video from PostgreSQL
+    Load annotations for a video
     """
+    annotations_dir = os.path.join(VIDEO_DIR, "annotations")
+    annotation_file = os.path.join(annotations_dir, f"{video_name}_annotations.json")
+    
+    if not os.path.exists(annotation_file):
+        return {"annotations": {}, "message": "No annotations found"}
+    
     try:
-        # Find video
-        video_filename = f"{video_name}.mp4"
-        db_video = db.query(Video).filter(Video.filename == video_filename).first()
-        
-        if not db_video:
-            return {"annotations": {}, "message": "No annotations found"}
-        
-        # Load annotations
-        db_annotations = db.query(Annotation).filter(Annotation.video_id == db_video.id).all()
-        
-        # Convert to frontend format
-        annotations = {}
-        for ann in db_annotations:
-            frame_idx = str(ann.frame_index)
-            if frame_idx not in annotations:
-                annotations[frame_idx] = []
-            annotations[frame_idx].append(ann.data)
+        import json
+        with open(annotation_file, 'r') as f:
+            annotations = json.load(f)
         
         return {
             "annotations": annotations,
-            "annotation_count": len(db_annotations)
+            "annotation_count": sum(len(boxes) for boxes in annotations.values()),
+            "file": annotation_file
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/annotations/{video_name}/export")
-def export_annotations(video_name: str, format: str = "json", db: Session = Depends(get_db)):
-    """Export annotations in different formats"""
+def export_annotations(video_name: str, format: str = "json"):
+    """
+    Export annotations in different formats (JSON, COCO, YOLO)
+    """
+    annotations_dir = os.path.join(VIDEO_DIR, "annotations")
+    annotation_file = os.path.join(annotations_dir, f"{video_name}_annotations.json")
+    
+    if not os.path.exists(annotation_file):
+        raise HTTPException(status_code=404, detail="No annotations found")
+    
     try:
-        video_filename = f"{video_name}.mp4"
-        db_video = db.query(Video).filter(Video.filename == video_filename).first()
-        
-        if not db_video:
-            raise HTTPException(status_code=404, detail="No annotations found")
-        
-        db_annotations = db.query(Annotation).filter(Annotation.video_id == db_video.id).all()
+        import json
+        with open(annotation_file, 'r') as f:
+            annotations = json.load(f)
         
         if format == "json":
-            # Convert to JSON format
-            annotations = {}
-            for ann in db_annotations:
-                frame_idx = str(ann.frame_index)
-                if frame_idx not in annotations:
-                    annotations[frame_idx] = []
-                annotations[frame_idx].append(ann.data)
-            
-            # Save to temp file
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
-                json.dump(annotations, f, indent=2)
-                temp_path = f.name
-            
+            # Return raw JSON format
             return FileResponse(
-                temp_path,
+                annotation_file,
                 media_type="application/json",
                 filename=f"{video_name}_annotations.json"
             )
@@ -483,36 +465,36 @@ def export_annotations(video_name: str, format: str = "json", db: Session = Depe
             }
             
             annotation_id = 1
-            frames = {}
-            
-            for ann in db_annotations:
-                if ann.frame_index not in frames:
-                    frames[ann.frame_index] = True
-                    coco_format["images"].append({
-                        "id": ann.frame_index,
-                        "file_name": f"frame_{ann.frame_index:04d}.jpg",
-                        "width": 1920,
-                        "height": 1080
-                    })
+            for frame_idx, boxes in annotations.items():
+                frame_idx = int(frame_idx)
                 
-                if ann.annotation_type == 'box':
+                # Add image info
+                coco_format["images"].append({
+                    "id": frame_idx,
+                    "file_name": f"frame_{frame_idx:04d}.jpg",
+                    "width": 1920,  # You might want to get actual dimensions
+                    "height": 1080
+                })
+                
+                # Add annotations
+                for box in boxes:
                     coco_format["annotations"].append({
                         "id": annotation_id,
-                        "image_id": ann.frame_index,
+                        "image_id": frame_idx,
                         "category_id": 1,
-                        "bbox": [ann.data["x"], ann.data["y"], ann.data["width"], ann.data["height"]],
-                        "area": ann.data["width"] * ann.data["height"],
+                        "bbox": [box["x"], box["y"], box["width"], box["height"]],
+                        "area": box["width"] * box["height"],
                         "iscrowd": 0
                     })
                     annotation_id += 1
             
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            # Save and return COCO format
+            coco_file = os.path.join(annotations_dir, f"{video_name}_coco.json")
+            with open(coco_file, 'w') as f:
                 json.dump(coco_format, f, indent=2)
-                temp_path = f.name
             
             return FileResponse(
-                temp_path,
+                coco_file,
                 media_type="application/json",
                 filename=f"{video_name}_coco.json"
             )
@@ -522,8 +504,8 @@ def export_annotations(video_name: str, format: str = "json", db: Session = Depe
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# GPU Monitoring (unchanged)
+    
+# GPU Monitoring
 try:
     import pynvml
     GPU_AVAILABLE = True
@@ -535,7 +517,9 @@ except:
 
 @app.get("/api/gpu/status")
 def get_gpu_status():
-    """Get status of all GPUs"""
+    """
+    Get status of all GPUs
+    """
     if not GPU_AVAILABLE:
         return {
             "available": False,
@@ -551,19 +535,23 @@ def get_gpu_status():
             handle = pynvml.nvmlDeviceGetHandleByIndex(i)
             name = pynvml.nvmlDeviceGetName(handle)
             
+            # Get memory info
             mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            memory_total = mem_info.total / (1024 ** 3)
+            memory_total = mem_info.total / (1024 ** 3)  # Convert to GB
             memory_used = mem_info.used / (1024 ** 3)
             memory_free = mem_info.free / (1024 ** 3)
             
+            # Get utilization
             util = pynvml.nvmlDeviceGetUtilizationRates(handle)
             gpu_util = util.gpu
             
+            # Get temperature
             try:
                 temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
             except:
                 temp = 0
             
+            # Get running processes
             try:
                 procs = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
                 process_count = len(procs)
@@ -597,97 +585,115 @@ def get_gpu_status():
         }
 
 
-# POSTGRESQL JOBS - NEW!
 @app.get("/api/jobs")
-def list_jobs(db: Session = Depends(get_db)):
-    """List all submitted jobs from database"""
-    jobs = db.query(Job).order_by(Job.created_at.desc()).all()
+def list_jobs():
+    """
+    List all submitted jobs
+    """
+    jobs_dir = os.path.join(VIDEO_DIR, "jobs")
     
-    return {
-        "jobs": [
-            {
-                "job_id": job.job_id,
-                "status": job.status,
-                "task_type": job.task_type,
-                "video_name": job.video_name,
-                "gpu_id": job.gpu_id,
-                "parameters": job.parameters,
-                "progress": job.progress,
-                "created_at": job.created_at.isoformat(),
-                "started_at": job.started_at.isoformat() if job.started_at else None,
-                "completed_at": job.completed_at.isoformat() if job.completed_at else None
-            }
-            for job in jobs
-        ]
-    }
+    if not os.path.exists(jobs_dir):
+        os.makedirs(jobs_dir)
+        return {"jobs": []}
+    
+    import json
+    jobs = []
+    
+    for filename in os.listdir(jobs_dir):
+        if filename.endswith('.json'):
+            filepath = os.path.join(jobs_dir, filename)
+            with open(filepath, 'r') as f:
+                job_data = json.load(f)
+                jobs.append(job_data)
+    
+    # Sort by creation time (newest first)
+    jobs.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    
+    return {"jobs": jobs}
 
 
 @app.post("/api/jobs/submit")
-async def submit_job(job_data: dict, db: Session = Depends(get_db)):
-    """Submit a new job to database"""
+async def submit_job(job_data: dict):
+    """
+    Submit a new job to run on GPU
+    """
+    jobs_dir = os.path.join(VIDEO_DIR, "jobs")
+    
+    if not os.path.exists(jobs_dir):
+        os.makedirs(jobs_dir)
+    
+    import json
+    from datetime import datetime
     import uuid
     
+    # Generate job ID
     job_id = str(uuid.uuid4())[:8]
     
-    job = Job(
-        job_id=job_id,
-        status="queued",
-        task_type=job_data.get("task_type", "unknown"),
-        video_name=job_data.get("video_name", ""),
-        gpu_id=job_data.get("gpu_id", 0),
-        parameters=job_data.get("parameters", {})
-    )
+    # Create job record
+    job = {
+        "job_id": job_id,
+        "status": "queued",
+        "task_type": job_data.get("task_type", "unknown"),
+        "video_name": job_data.get("video_name", ""),
+        "gpu_id": job_data.get("gpu_id", 0),
+        "parameters": job_data.get("parameters", {}),
+        "created_at": datetime.now().isoformat(),
+        "started_at": None,
+        "completed_at": None,
+        "progress": 0,
+        "logs": []
+    }
     
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+    # Save job file
+    job_file = os.path.join(jobs_dir, f"{job_id}.json")
+    with open(job_file, 'w') as f:
+        json.dump(job, f, indent=2)
     
     return {
         "success": True,
         "job_id": job_id,
         "message": f"Job {job_id} submitted successfully",
-        "job": {
-            "job_id": job.job_id,
-            "status": job.status,
-            "task_type": job.task_type,
-            "created_at": job.created_at.isoformat()
-        }
+        "job": job
     }
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job_status(job_id: str, db: Session = Depends(get_db)):
-    """Get status of a specific job"""
-    job = db.query(Job).filter(Job.job_id == job_id).first()
+def get_job_status(job_id: str):
+    """
+    Get status of a specific job
+    """
+    jobs_dir = os.path.join(VIDEO_DIR, "jobs")
+    job_file = os.path.join(jobs_dir, f"{job_id}.json")
     
-    if not job:
+    if not os.path.exists(job_file):
         raise HTTPException(status_code=404, detail="Job not found")
     
-    return {
-        "job": {
-            "job_id": job.job_id,
-            "status": job.status,
-            "task_type": job.task_type,
-            "video_name": job.video_name,
-            "gpu_id": job.gpu_id,
-            "progress": job.progress,
-            "created_at": job.created_at.isoformat(),
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None
-        }
-    }
+    import json
+    with open(job_file, 'r') as f:
+        job = json.load(f)
+    
+    return {"job": job}
 
 
 @app.delete("/api/jobs/{job_id}")
-def cancel_job(job_id: str, db: Session = Depends(get_db)):
-    """Cancel a job"""
-    job = db.query(Job).filter(Job.job_id == job_id).first()
+def cancel_job(job_id: str):
+    """
+    Cancel a job
+    """
+    jobs_dir = os.path.join(VIDEO_DIR, "jobs")
+    job_file = os.path.join(jobs_dir, f"{job_id}.json")
     
-    if not job:
+    if not os.path.exists(job_file):
         raise HTTPException(status_code=404, detail="Job not found")
     
-    job.status = "cancelled"
-    db.commit()
+    import json
+    with open(job_file, 'r') as f:
+        job = json.load(f)
+    
+    job["status"] = "cancelled"
+    
+    with open(job_file, 'w') as f:
+        json.dump(job, f, indent=2)
     
     return {
         "success": True,
