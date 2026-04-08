@@ -1,13 +1,15 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 import aiofiles
 from typing import Optional
 import os
 from pathlib import Path
 import subprocess
 import shutil
-from fastapi.responses import FileResponse
+import threading
+import time
+from datetime import datetime
 
 # Create the FastAPI application
 app = FastAPI(title="Video Annotation Backend")
@@ -24,10 +26,16 @@ app.add_middleware(
 # Configuration - video directory path
 VIDEO_DIR = "../test_videos"  # Path to your videos folder
 
+# Global dictionary to track extraction progress
+extraction_progress = {}
+
 # Helper function to check if file is a video
 def is_video_file(filename: str) -> bool:
-    """Check if file has a video extension"""
-    video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm']
+    """Check if file has a video extension - NOW SUPPORTS MORE FORMATS!"""
+    video_extensions = [
+        '.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm',
+        '.m4v', '.mpg', '.mpeg', '.3gp', '.ts', '.mts'
+    ]
     return any(filename.lower().endswith(ext) for ext in video_extensions)
 
 # ===== ENDPOINTS START HERE =====
@@ -38,7 +46,7 @@ def read_root():
     return {
         "message": "Video Annotation Backend is running!",
         "status": "online",
-        "version": "0.1.0"
+        "version": "0.2.0"  # Updated version!
     }
 
 # Health check endpoint
@@ -199,61 +207,141 @@ async def stream_video(filename: str, request: Request):
         media_type='video/mp4'
     )
 
+# ASYNC FRAME EXTRACTION - NEW VERSION!
 @app.post("/api/extract-frames/{filename}")
-async def extract_frames(filename: str, fps: int = 5):
+async def extract_frames(filename: str, fps: int = 5, quality: int = 2):
     """
-    Extract frames from video at specified FPS
-    fps: frames per second to extract (default: 5 = extract 5 frames per second)
+    Start asynchronous frame extraction
+    Returns immediately with a task ID
+    
+    Args:
+        filename: Video filename
+        fps: Frames per second to extract (default: 5)
+        quality: JPEG quality 1-31, lower is better (default: 2)
     """
     video_path = os.path.join(VIDEO_DIR, filename)
     
-    # Check if video exists
     if not os.path.exists(video_path):
         raise HTTPException(status_code=404, detail="Video not found")
     
-    # Create frames directory for this video
     video_name = os.path.splitext(filename)[0]
-    frames_dir = os.path.join(VIDEO_DIR, f"{video_name}_frames")
     
-    # Remove old frames if they exist
-    if os.path.exists(frames_dir):
-        shutil.rmtree(frames_dir)
+    # Check if extraction is already running
+    if video_name in extraction_progress:
+        if extraction_progress[video_name]['status'] == 'running':
+            return {
+                "message": "Extraction already in progress",
+                "progress": extraction_progress[video_name]
+            }
     
-    os.makedirs(frames_dir)
+    # Initialize progress tracking
+    task_id = f"{video_name}_{int(time.time())}"
+    extraction_progress[video_name] = {
+        "task_id": task_id,
+        "status": "running",
+        "progress": 0,
+        "total_frames": 0,
+        "extracted_frames": 0,
+        "started_at": datetime.now().isoformat(),
+        "message": "Starting frame extraction..."
+    }
     
-    # FFmpeg command to extract frames
-    output_pattern = os.path.join(frames_dir, "frame_%04d.jpg")
+    # Start extraction in background thread
+    thread = threading.Thread(
+        target=extract_frames_background,
+        args=(filename, fps, quality, video_name)
+    )
+    thread.daemon = True
+    thread.start()
     
+    return {
+        "success": True,
+        "message": "Frame extraction started in background",
+        "task_id": task_id,
+        "video_name": video_name
+    }
+
+
+def extract_frames_background(filename: str, fps: int, quality: int, video_name: str):
+    """
+    Background thread function for frame extraction
+    This runs without blocking the server!
+    """
     try:
-        # Extract frames using FFmpeg
+        video_path = os.path.join(VIDEO_DIR, filename)
+        frames_dir = os.path.join(VIDEO_DIR, f"{video_name}_frames")
+        
+        # Update progress
+        extraction_progress[video_name]['message'] = "Preparing directories..."
+        extraction_progress[video_name]['progress'] = 5
+        
+        # Remove old frames if they exist
+        if os.path.exists(frames_dir):
+            shutil.rmtree(frames_dir)
+        
+        os.makedirs(frames_dir)
+        
+        output_pattern = os.path.join(frames_dir, "frame_%04d.jpg")
+        
+        # Update progress
+        extraction_progress[video_name]['message'] = "Extracting frames with FFmpeg..."
+        extraction_progress[video_name]['progress'] = 10
+        
+        # FFmpeg command
         cmd = [
             'ffmpeg',
             '-i', video_path,
-            '-vf', f'fps={fps}',  # Extract at specified FPS
-            '-q:v', '2',  # High quality (1-31, lower is better)
-            output_pattern
+            '-vf', f'fps={fps}',
+            '-q:v', str(quality),  # User-configurable quality!
+            output_pattern,
+            '-y'  # Overwrite output files
         ]
         
+        # Run FFmpeg
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"FFmpeg error: {result.stderr}")
+            extraction_progress[video_name]['status'] = 'failed'
+            extraction_progress[video_name]['message'] = f"FFmpeg error: {result.stderr[:200]}"
+            extraction_progress[video_name]['progress'] = 0
+            return
+        
+        # Update progress
+        extraction_progress[video_name]['progress'] = 90
+        extraction_progress[video_name]['message'] = "Counting frames..."
         
         # Count extracted frames
         frames = [f for f in os.listdir(frames_dir) if f.endswith('.jpg')]
         frames.sort()
         
-        return {
-            "success": True,
-            "video": filename,
-            "frames_dir": frames_dir,
-            "frame_count": len(frames),
-            "fps": fps,
-            "frames": frames
-        }
+        # Update progress - complete
+        extraction_progress[video_name]['status'] = 'completed'
+        extraction_progress[video_name]['progress'] = 100
+        extraction_progress[video_name]['total_frames'] = len(frames)
+        extraction_progress[video_name]['extracted_frames'] = len(frames)
+        extraction_progress[video_name]['message'] = f"Successfully extracted {len(frames)} frames"
+        extraction_progress[video_name]['completed_at'] = datetime.now().isoformat()
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        extraction_progress[video_name]['status'] = 'failed'
+        extraction_progress[video_name]['message'] = str(e)
+        extraction_progress[video_name]['progress'] = 0
+
+
+@app.get("/api/extract-frames/{video_name}/progress")
+def get_extraction_progress(video_name: str):
+    """
+    Get the progress of frame extraction for a video
+    Frontend polls this endpoint to update progress bar
+    """
+    if video_name not in extraction_progress:
+        return {
+            "status": "not_started",
+            "progress": 0,
+            "message": "No extraction in progress"
+        }
+    
+    return extraction_progress[video_name]
 
 
 @app.get("/api/frames/{video_name}")
@@ -288,7 +376,6 @@ async def get_frame_image(video_name: str, frame_filename: str):
     if not os.path.exists(frame_path):
         raise HTTPException(status_code=404, detail="Frame not found")
     
-    from fastapi.responses import FileResponse
     return FileResponse(frame_path, media_type="image/jpeg")
 
 @app.post("/api/annotations/{video_name}")

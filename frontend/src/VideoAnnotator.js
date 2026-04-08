@@ -10,10 +10,12 @@ const VideoAnnotator = ({ video, apiBase }) => {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState(0);
+  const [extractionMessage, setExtractionMessage] = useState('');
   const [framesExtracted, setFramesExtracted] = useState(false);
   
   // Drawing state
-  const [currentTool, setCurrentTool] = useState('box'); // 'box', 'polygon', 'freehand', 'point'
+  const [currentTool, setCurrentTool] = useState('box');
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentBox, setCurrentBox] = useState(null);
@@ -43,18 +45,72 @@ const VideoAnnotator = ({ video, apiBase }) => {
     }
   };
 
+  // NEW: Async frame extraction with progress tracking!
   const extractFrames = async () => {
     setExtracting(true);
+    setExtractionProgress(0);
+    setExtractionMessage('Starting extraction...');
+    
     try {
+      // Start extraction
       const response = await axios.post(`${apiBase}/api/extract-frames/${video.filename}?fps=5`);
-      setFrames(response.data.frames);
-      setFramesExtracted(true);
-      alert(`Extracted ${response.data.frame_count} frames!`);
+      
+      if (!response.data.success) {
+        alert('Failed to start extraction');
+        setExtracting(false);
+        return;
+      }
+      
+      // Poll for progress
+      let progress = 0;
+      let attempts = 0;
+      const maxAttempts = 300; // 5 minutes max
+      
+      while (progress < 100 && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        attempts++;
+        
+        try {
+          const progressResponse = await axios.get(`${apiBase}/api/extract-frames/${videoName}/progress`);
+          const data = progressResponse.data;
+          
+          progress = data.progress || 0;
+          setExtractionProgress(progress);
+          setExtractionMessage(data.message || 'Extracting...');
+          
+          if (data.status === 'completed') {
+            // Load the frames
+            const framesResponse = await axios.get(`${apiBase}/api/frames/${videoName}`);
+            setFrames(framesResponse.data.frames);
+            setFramesExtracted(true);
+            setExtractionMessage(`✅ Extracted ${framesResponse.data.frame_count} frames!`);
+            setTimeout(() => {
+              setExtracting(false);
+              setExtractionProgress(0);
+            }, 2000);
+            break;
+          } else if (data.status === 'failed') {
+            alert(`❌ Frame extraction failed: ${data.message}`);
+            setExtracting(false);
+            setExtractionProgress(0);
+            break;
+          }
+        } catch (pollError) {
+          console.error('Error polling progress:', pollError);
+        }
+      }
+      
+      if (attempts >= maxAttempts) {
+        alert('Frame extraction timed out. The video might be too large.');
+        setExtracting(false);
+      }
+      
     } catch (err) {
       alert('Error extracting frames: ' + err.message);
       console.error(err);
+      setExtracting(false);
+      setExtractionProgress(0);
     }
-    setExtracting(false);
   };
 
   const loadAnnotations = async () => {
@@ -112,14 +168,12 @@ const VideoAnnotator = ({ video, apiBase }) => {
     
     const frameAnnotations = annotations[currentFrameIndex] || [];
     
-    // Draw saved annotations
     frameAnnotations.forEach((annotation, index) => {
       ctx.strokeStyle = '#667eea';
       ctx.fillStyle = '#667eea';
       ctx.lineWidth = 3;
 
       if (annotation.type === 'box') {
-        // Draw bounding box
         ctx.strokeRect(annotation.x, annotation.y, annotation.width, annotation.height);
         ctx.fillRect(annotation.x, annotation.y - 25, 80, 25);
         ctx.fillStyle = 'white';
@@ -127,7 +181,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
         ctx.fillText(`Box ${index + 1}`, annotation.x + 5, annotation.y - 7);
       } 
       else if (annotation.type === 'polygon') {
-        // Draw polygon
         if (annotation.points && annotation.points.length > 0) {
           ctx.beginPath();
           ctx.moveTo(annotation.points[0].x, annotation.points[0].y);
@@ -137,14 +190,12 @@ const VideoAnnotator = ({ video, apiBase }) => {
           ctx.closePath();
           ctx.stroke();
           
-          // Draw points
           annotation.points.forEach(point => {
             ctx.beginPath();
             ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
             ctx.fill();
           });
           
-          // Label
           ctx.fillRect(annotation.points[0].x, annotation.points[0].y - 25, 100, 25);
           ctx.fillStyle = 'white';
           ctx.font = 'bold 14px Arial';
@@ -152,7 +203,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
         }
       }
       else if (annotation.type === 'freehand') {
-        // Draw freehand path
         if (annotation.path && annotation.path.length > 1) {
           ctx.beginPath();
           ctx.moveTo(annotation.path[0].x, annotation.path[0].y);
@@ -161,7 +211,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
           });
           ctx.stroke();
           
-          // Label
           ctx.fillRect(annotation.path[0].x, annotation.path[0].y - 25, 110, 25);
           ctx.fillStyle = 'white';
           ctx.font = 'bold 14px Arial';
@@ -169,7 +218,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
         }
       }
       else if (annotation.type === 'point') {
-        // Draw keypoint
         ctx.beginPath();
         ctx.arc(annotation.x, annotation.y, 6, 0, 2 * Math.PI);
         ctx.fill();
@@ -177,7 +225,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
         ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Label
         ctx.fillStyle = '#667eea';
         ctx.fillRect(annotation.x + 10, annotation.y - 15, 85, 25);
         ctx.fillStyle = 'white';
@@ -186,7 +233,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
       }
     });
     
-    // Draw current annotation being created
     ctx.strokeStyle = '#48bb78';
     ctx.fillStyle = '#48bb78';
     ctx.lineWidth = 3;
@@ -203,7 +249,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
       });
       ctx.stroke();
       
-      // Draw points
       polygonPoints.forEach(point => {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
@@ -246,7 +291,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
       setFreehandPath([{ x, y }]);
     }
     else if (currentTool === 'point') {
-      // Add point immediately
       const frameAnnotations = annotations[currentFrameIndex] || [];
       setAnnotations({
         ...annotations,
@@ -336,7 +380,7 @@ const VideoAnnotator = ({ video, apiBase }) => {
   const goToNextFrame = () => {
     if (currentFrameIndex < frames.length - 1) {
       setCurrentFrameIndex(currentFrameIndex + 1);
-      setPolygonPoints([]); // Clear polygon when changing frames
+      setPolygonPoints([]);
       setFreehandPath([]);
     }
   };
@@ -391,15 +435,29 @@ const VideoAnnotator = ({ video, apiBase }) => {
             <ul>
               <li>Extracts 5 frames per second</li>
               <li>High quality JPEGs</li>
-              <li>Takes 10-60 seconds depending on video length</li>
+              <li>Runs in background - won't freeze the app!</li>
             </ul>
           </div>
+          
+          {/* PROGRESS BAR! */}
+          {extracting && (
+            <div className="progress-container">
+              <div className="progress-bar">
+                <div 
+                  className="progress-fill" 
+                  style={{ width: `${extractionProgress}%` }}
+                />
+              </div>
+              <p className="progress-text">{extractionMessage} ({extractionProgress}%)</p>
+            </div>
+          )}
+          
           <button 
             className="extract-button"
             onClick={extractFrames}
             disabled={extracting}
           >
-            {extracting ? '⏳ Extracting Frames...' : '🎬 Extract Frames'}
+            {extracting ? `⏳ Extracting... ${extractionProgress}%` : '🎬 Extract Frames'}
           </button>
         </div>
       </div>
@@ -418,7 +476,6 @@ const VideoAnnotator = ({ video, apiBase }) => {
         <span>{getTotalAnnotations()} total annotations</span>
       </div>
 
-      {/* Tool Selector */}
       <div className="tool-selector">
         <button 
           className={currentTool === 'box' ? 'active' : ''}
@@ -478,7 +535,7 @@ const VideoAnnotator = ({ video, apiBase }) => {
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onClick={handleCanvasClick}
-            style={{ cursor: currentTool === 'point' ? 'crosshair' : currentTool === 'freehand' ? 'crosshair' : 'crosshair' }}
+            style={{ cursor: 'crosshair' }}
           />
         </div>
       </div>
