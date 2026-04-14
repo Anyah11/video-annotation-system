@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import Login from './Login';
 import VideoAnnotator from './VideoAnnotator';
 import GPUDashboard from './GPUDashboard';
+import VideoUpload from './VideoUpload';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -75,10 +76,12 @@ function AppContent() {
 
       <div className="app-container">
         <aside className="sidebar">
-          <h2>Videos ({videos.length})</h2>
-          
-          {loading && <p className="loading">Loading videos...</p>}
-          {error && <p className="error">{error}</p>}
+            <h2>Videos ({videos.length})</h2>
+            
+            <VideoUpload apiBase={API_BASE} onUploadComplete={loadVideos} />
+            
+            {loading && <p className="loading">Loading videos...</p>}
+            {error && <p className="error">{error}</p>}
           
           <div className="video-list">
             {videos.map((video, index) => (

@@ -5,6 +5,8 @@ import os
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Video
+from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
+import shutil
 
 router = APIRouter(prefix="/api/videos", tags=["videos"])
 
@@ -127,3 +129,61 @@ async def stream_video(filename: str, request: Request):
         headers=headers,
         media_type='video/mp4'
     )
+
+@router.post("/upload")
+async def upload_video(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload a video file"""
+    try:
+        # Validate file type
+        if not is_video_file(file.filename):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid file type. Supported formats: .mp4, .avi, .mov, .mkv, .flv, .wmv, .webm, .m4v, .mpg, .mpeg, .3gp, .ts, .mts"
+            )
+        
+        # Create video directory if it doesn't exist
+        if not os.path.exists(VIDEO_DIR):
+            os.makedirs(VIDEO_DIR)
+        
+        # Save file
+        file_path = os.path.join(VIDEO_DIR, file.filename)
+        
+        # Check if file already exists
+        if os.path.exists(file_path):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{file.filename}' already exists"
+            )
+        
+        # Write file in chunks
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Get file stats
+        file_stats = os.stat(file_path)
+        
+        # Add to database
+        db_video = Video(
+            filename=file.filename,
+            filepath=file_path,
+            size_bytes=file_stats.st_size,
+            size_mb=round(file_stats.st_size / (1024 * 1024), 2)
+        )
+        db.add(db_video)
+        db.commit()
+        db.refresh(db_video)
+        
+        return {
+            "success": True,
+            "message": f"Video '{file.filename}' uploaded successfully",
+            "video": {
+                "filename": file.filename,
+                "size_mb": round(file_stats.st_size / (1024 * 1024), 2),
+                "path": file_path
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
