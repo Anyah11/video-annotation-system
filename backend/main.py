@@ -3,13 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import init_db
 
 # Import routers
-from api.v1 import videos, frames, annotations, gpu, jobs
+from api.v1 import videos, frames, annotations, gpu, jobs, auth  # Add auth here
 
 # Create the FastAPI application
 app = FastAPI(
     title="Video Annotation Backend",
     description="GPU-Enabled Video Annotation System with PostgreSQL",
-    version="0.4.0 - Modular Edition"
+    version="0.5.0 - With Authentication"  # Update version
 )
 
 # Initialize database on startup
@@ -29,6 +29,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router)  # Add this line!
 app.include_router(videos.router)
 app.include_router(frames.router)
 app.include_router(annotations.router)
@@ -41,8 +42,8 @@ def read_root():
     return {
         "message": "Video Annotation Backend is running!",
         "status": "online",
-        "version": "0.4.0 - Modular Edition",
-        "routers": ["videos", "frames", "annotations", "gpu", "jobs"]
+        "version": "0.5.0 - With Authentication",  # Update version
+        "routers": ["auth", "videos", "frames", "annotations", "gpu", "jobs"]  # Add auth
     }
 
 # Health check

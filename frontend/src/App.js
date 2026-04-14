@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import axios from 'axios';
+import { AuthProvider, useAuth } from './AuthContext';
+import Login from './Login';
 import VideoAnnotator from './VideoAnnotator';
 import GPUDashboard from './GPUDashboard';
 
 const API_BASE = 'http://localhost:8000';
 
-function App() {
+function AppContent() {
+  const { user, logout, loading: authLoading } = useAuth();
   const [videos, setVideos] = useState([]);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,8 +17,10 @@ function App() {
   const [mode, setMode] = useState('view');
 
   useEffect(() => {
-    loadVideos();
-  }, []);
+    if (user) {
+      loadVideos();
+    }
+  }, [user]);
 
   const loadVideos = async () => {
     try {
@@ -35,11 +40,37 @@ function App() {
     setMode('view');
   };
 
+  // Show loading screen while checking authentication
+  if (authLoading) {
+    return (
+      <div className="loading-screen">
+        <h2>Loading...</h2>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (!user) {
+    return <Login />;
+  }
+
+  // Main app (authenticated users only)
   return (
     <div className="App">
       <header className="app-header">
-        <h1>🎥 Video Annotation System</h1>
-        <p>Laboratory Video Browser & Annotation Tool</p>
+        <div className="header-left">
+          <h1>🎥 Video Annotation System</h1>
+          <p>Laboratory Video Browser & Annotation Tool</p>
+        </div>
+        <div className="user-info">
+          <span className="welcome-text">
+            Welcome, <strong>{user.username}</strong>
+            {user.is_admin === 1 && <span className="admin-badge">Admin</span>}
+          </span>
+          <button onClick={logout} className="logout-button">
+            Logout
+          </button>
+        </div>
       </header>
 
       <div className="app-container">
@@ -100,7 +131,7 @@ function App() {
                     className="video-player"
                   >
                     <source
-                      src={`${API_BASE}/api/stream/${selectedVideo.filename}`}
+                      src={`${API_BASE}/api/videos/stream/${selectedVideo.filename}`}
                       type="video/mp4"
                     />
                     Your browser doesn't support video playback.
@@ -127,6 +158,14 @@ function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

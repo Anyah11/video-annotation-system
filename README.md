@@ -1,268 +1,513 @@
-# 🎥 GPU-Enabled Video Annotation System
+📝 Let's Create an Amazing README!
+bashcd /Users/kelechianyanwu/video-annotation-system
+nano README.md
+Paste this complete README:
+markdown# 🎬 Video Annotation System
 
-A web-based application for remote video annotation with GPU-accelerated task execution. Built for laboratory research workflows.
+A full-stack GPU-enabled video annotation web application built for research labs. Features frame-by-frame annotation, real-time GPU monitoring, async processing, and user authentication.
 
-![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)
-![React](https://img.shields.io/badge/React-18+-61dafb.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## 🌟 Features
+## ✨ Features
 
-- **Video Streaming**: Play videos remotely with seek support
-- **Frame-Based Annotation**: Extract frames and annotate with multiple tools
-  - Bounding boxes
-  - Polygons  
-  - Freehand drawing
-  - Keypoints
-- **Persistent Storage**: Save and load annotations
-- **GPU Monitoring**: Real-time GPU utilization, memory, and temperature
-- **Job Management**: Submit and track GPU tasks
-- **Export Formats**: JSON and COCO format support
+### 🎥 Video Management
+- Support for 12 video formats (MP4, AVI, MOV, MKV, FLV, WMV, WebM, M4V, MPG, MPEG, 3GP, TS, MTS)
+- Streaming video playback with HTTP range request support
+- Video browser with metadata display
+- Automatic video indexing
+
+### ✏️ Annotation Tools
+- **Bounding Box**: Draw rectangular regions
+- **Polygon**: Multi-point shape annotation
+- **Freehand**: Free-form drawing
+- **Keypoint**: Single point marking
+- Frame-by-frame annotation
+- Auto-save and auto-load annotations
+- Export to JSON and COCO formats
+
+### 🚀 Advanced Processing
+- **Async Frame Extraction**: Non-blocking background processing
+- **Real-time Progress Tracking**: Visual progress bar with status updates
+- **Configurable Parameters**: Adjustable FPS and quality settings
+- Multi-threaded processing
+
+### 🖥️ GPU Management
+- Real-time GPU monitoring (NVIDIA GPUs)
+- Memory usage tracking
+- Temperature monitoring
+- GPU utilization statistics
+- Job queue management
+
+### 🔐 Authentication & Security
+- JWT token-based authentication
+- Role-based access control (Admin/User)
+- Secure password hashing (SHA256)
+- Protected API endpoints
+- Session management
+
+### 🗄️ Database
+- PostgreSQL for production-grade data storage
+- Relational data model with foreign keys
+- Database indexes for fast queries
+- Support for concurrent users
+
+---
 
 ## 🏗️ Architecture
-```
-┌─────────────┐         HTTP          ┌─────────────┐
-│  Frontend   │ ←──────────────────→  │   Backend   │
-│  (React)    │                       │  (FastAPI)  │
-│  Port 3000  │                       │  Port 8000  │
-└─────────────┘                       └─────────────┘
-                                            ↓
-                                      ┌─────────────┐
-                                      │ File System │
-                                      │  - Videos   │
-                                      │  - Frames   │
-                                      │  - Annotations
-                                      └─────────────┘
-```
 
-## 📦 Prerequisites
+### Backend (FastAPI + Python)
+backend/
+├── main.py              # App initialization & routing
+├── auth.py              # Authentication utilities
+├── database.py          # Database connection
+├── models.py            # SQLAlchemy models
+├── requirements.txt     # Python dependencies
+└── api/v1/             # Modular routers
+├── videos.py        # Video streaming & listing
+├── frames.py        # Frame extraction
+├── annotations.py   # Annotation management
+├── gpu.py          # GPU monitoring
+├── jobs.py         # Job queue
+└── auth.py         # Authentication endpoints
 
-Before you begin, make sure you have:
+### Frontend (React)
+frontend/
+├── src/
+│   ├── App.js           # Main application
+│   ├── AuthContext.js   # Authentication state
+│   ├── Login.js         # Login page
+│   ├── VideoAnnotator.js # Annotation interface
+│   └── GPUDashboard.js   # GPU monitoring UI
+└── public/
 
-- **Python 3.8+** - [Download here](https://www.python.org/downloads/)
-- **Node.js 14+** - [Download here](https://nodejs.org/)
-- **FFmpeg** - For video frame extraction
-  - Mac: `brew install ffmpeg`
-  - Ubuntu: `sudo apt install ffmpeg`
-  - Windows: [Download from ffmpeg.org](https://ffmpeg.org/download.html)
-- **Git** - [Download here](https://git-scm.com/downloads)
-- **(Optional) NVIDIA GPU** - For GPU monitoring features
+### Database Schema
+- **videos**: Video metadata and file information
+- **annotations**: Frame-based annotation data
+- **jobs**: Background job tracking
+- **users**: User accounts and permissions
 
-## 🚀 Quick Start (Local Development)
+---
 
-### 1️⃣ Clone the Repository
+## 🚀 Quick Start
+
+### Prerequisites
+- **Python 3.14+**
+- **Node.js 16+**
+- **PostgreSQL 14+**
+- **FFmpeg** (for frame extraction)
+- **NVIDIA GPU** (optional, for GPU monitoring)
+
+### 1️⃣ Database Setup
+
 ```bash
-git clone https://github.com/Anyah11/video-annotation-system.git
-cd video-annotation-system
+# Install PostgreSQL (macOS)
+brew install postgresql@14
+
+# Start PostgreSQL
+brew services start postgresql@14
+
+# Create database
+createdb video_annotation_db
 ```
 
-### 2️⃣ Set Up Backend
+### 2️⃣ Backend Setup
+
 ```bash
-# Navigate to backend folder
+# Navigate to backend
 cd backend
 
 # Create virtual environment
 python3 -m venv venv
-
-# Activate virtual environment
-# On Mac/Linux:
-source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install fastapi uvicorn python-multipart aiofiles pynvml
+pip install -r requirements.txt
 
-# Save dependencies (optional)
-pip freeze > requirements.txt
-```
-
-### 3️⃣ Set Up Frontend
-
-Open a **NEW terminal window** (keep backend terminal open), then:
-```bash
-# Navigate to frontend folder
-cd video-annotation-system/frontend
-
-# Install dependencies
-npm install
-```
-
-### 4️⃣ Add Test Videos
-```bash
-# Create test videos folder (if it doesn't exist)
-mkdir -p test_videos
-
-# Add your video files to this folder
-# Supported formats: .mp4, .avi, .mov, .mkv, .webm
-```
-
-### 5️⃣ Start the Application
-
-**Terminal 1 - Backend:**
-```bash
-cd backend
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# Start backend server
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-You should see:
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000
-INFO:     Application startup complete.
-```
+Backend will run at: **http://localhost:8000**
 
-**Terminal 2 - Frontend:**
+API Documentation: **http://localhost:8000/docs**
+
+### 3️⃣ Frontend Setup
+
 ```bash
+# Navigate to frontend (in new terminal)
 cd frontend
+
+# Install dependencies
+npm install
+
+# Start development server
 npm start
 ```
 
-Your browser should automatically open to `http://localhost:3000`
+Frontend will run at: **http://localhost:3000**
 
-If not, manually visit: **http://localhost:3000**
+### 4️⃣ Create First Admin User
 
-### 6️⃣ Using the Application
-
-1. **View Videos**
-   - Click on any video in the left sidebar
-   - Video will play in the main area
-
-2. **Annotate Videos**
-   - Click "✏️ Annotate Mode" button
-   - Click "🎬 Extract Frames" (first time only, takes 10-60 seconds)
-   - Select annotation tool (Box, Polygon, Freehand, Point)
-   - Draw on the frame
-   - Click "💾 Save" to persist annotations
-
-3. **Monitor GPUs & Submit Jobs**
-   - Click "🖥️ GPU & Jobs" button
-   - View real-time GPU stats (if NVIDIA GPU available)
-   - Submit computational tasks
-   - Track job status
-
-## 🛠️ Tech Stack
-
-### Backend
-- **FastAPI** - Modern Python web framework
-- **FFmpeg** - Video frame extraction
-- **pynvml** - NVIDIA GPU monitoring
-- **aiofiles** - Async file operations
-
-### Frontend
-- **React** - UI framework
-- **Axios** - HTTP client
-- **HTML5 Canvas** - Annotation drawing
-
-## 📁 Project Structure
+```bash
+curl -X POST "http://localhost:8000/api/auth/create-first-admin?username=admin&email=admin@lab.com&password=admin123"
 ```
-video-annotation-system/
-├── backend/
-│   ├── main.py                 # FastAPI application & all endpoints
-│   ├── requirements.txt        # Python dependencies
-│   └── venv/                   # Virtual environment (not in git)
-├── frontend/
-│   ├── src/
-│   │   ├── App.js             # Main React component
-│   │   ├── VideoAnnotator.js  # Annotation interface
-│   │   ├── GPUDashboard.js    # GPU monitoring UI
-│   │   └── *.css              # Styles
-│   ├── public/
-│   └── package.json
-├── test_videos/               # Your video files (not in git)
-├── .gitignore
-└── README.md
+
+### 5️⃣ Login
+
+Open http://localhost:3000 and login with:
+- **Username**: admin
+- **Password**: admin123
+
+---
+
+## 📚 Usage Guide
+
+### Adding Videos
+
+Place video files in the `test_videos/` directory:
+```bash
+cp your_video.mp4 test_videos/
 ```
+
+Videos will automatically appear in the application.
+
+### Annotating Videos
+
+1. **Select a video** from the sidebar
+2. Click **"Annotate Mode"**
+3. Click **"Extract Frames"** (if not already extracted)
+4. Wait for progress bar to complete
+5. Use annotation tools to mark frames:
+   - **Box**: Click and drag to draw rectangles
+   - **Polygon**: Click to place points, double-click to complete
+   - **Freehand**: Click and drag to draw freely
+   - **Point**: Click to place keypoints
+6. Click **"Save"** to store annotations
+7. Export annotations via **"Export JSON"** or **"Export COCO"**
+
+### Managing Users (Admin Only)
+
+#### Via API Documentation:
+1. Go to http://localhost:8000/docs
+2. Click **"Authorize"** and enter: `Bearer YOUR_TOKEN`
+3. Use **POST /api/auth/register** to create users
+
+#### Via Terminal:
+```bash
+# Login to get token
+TOKEN=$(curl -X POST "http://localhost:8000/api/auth/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin&password=admin123" | jq -r '.access_token')
+
+# Create a new user
+curl -X POST "http://localhost:8000/api/auth/register?username=researcher1&email=researcher1@lab.com&password=pass123&is_admin=false" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### View All Users:
+```bash
+psql video_annotation_db -c "SELECT id, username, email, is_admin, created_at FROM users;"
+```
+
+### GPU Monitoring
+
+Click **"GPU & Jobs"** tab to:
+- View real-time GPU statistics
+- Monitor memory usage
+- Track GPU temperature
+- Submit and manage processing jobs
+
+---
 
 ## 🔧 Configuration
 
-### Change Video Directory
+### Backend Configuration
 
-Edit `backend/main.py`:
+**`backend/auth.py`** - Update security settings:
 ```python
-VIDEO_DIR = "../test_videos"  # Change to your video location
+SECRET_KEY = "your-super-secret-key-change-in-production"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 ```
 
-### Change API URL (if deploying)
+**`backend/database.py`** - Database connection:
+```python
+DATABASE_URL = "postgresql://localhost/video_annotation_db"
+```
 
-Edit `frontend/src/App.js`, `VideoAnnotator.js`, `GPUDashboard.js`:
+**`backend/api/v1/videos.py`** - Video directory:
+```python
+VIDEO_DIR = "../test_videos"
+```
+
+### Frontend Configuration
+
+**`frontend/src/App.js`** - API endpoint:
 ```javascript
-const API_BASE = 'http://localhost:8000';  // Change to your server URL
+const API_BASE = 'http://localhost:8000';
 ```
 
-## 📊 API Endpoints
+---
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Health check |
-| `/api/videos` | GET | List all videos |
-| `/api/stream/{filename}` | GET | Stream video with range support |
-| `/api/extract-frames/{filename}` | POST | Extract frames from video (5 fps) |
-| `/api/frames/{video_name}` | GET | List extracted frames |
-| `/api/frame-image/{video_name}/{frame}` | GET | Get specific frame image |
-| `/api/annotations/{video_name}` | GET | Load annotations |
-| `/api/annotations/{video_name}` | POST | Save annotations |
-| `/api/annotations/{video_name}/export` | GET | Export annotations (JSON/COCO) |
-| `/api/gpu/status` | GET | Get GPU statistics |
-| `/api/jobs` | GET | List all jobs |
-| `/api/jobs/submit` | POST | Submit new GPU job |
-| `/api/jobs/{job_id}` | GET | Get job status |
-| `/api/jobs/{job_id}` | DELETE | Cancel job |
+## 📡 API Endpoints
 
-Visit `http://localhost:8000/docs` for interactive API documentation!
+### Authentication
+- `POST /api/auth/create-first-admin` - Create first admin (no auth required)
+- `POST /api/auth/register` - Create user (admin only)
+- `POST /api/auth/login` - Login and get JWT token
+- `GET /api/auth/me` - Get current user info
+- `GET /api/auth/users` - List all users (admin only)
+- `DELETE /api/auth/users/{user_id}` - Delete user (admin only)
 
-## 🐛 Troubleshooting
+### Videos
+- `GET /api/videos` - List all videos
+- `GET /api/videos/stream/{filename}` - Stream video with range support
+
+### Frames
+- `POST /api/extract-frames/{filename}` - Start async frame extraction
+- `GET /api/extract-frames/{video_name}/progress` - Get extraction progress
+- `GET /api/frames/{video_name}` - List extracted frames
+- `GET /api/frame-image/{video_name}/{frame}` - Get frame image
+
+### Annotations
+- `POST /api/annotations/{video_name}` - Save annotations
+- `GET /api/annotations/{video_name}` - Load annotations
+- `GET /api/annotations/{video_name}/export?format=json` - Export as JSON
+- `GET /api/annotations/{video_name}/export?format=coco` - Export as COCO
+
+### GPU & Jobs
+- `GET /api/gpu/status` - Get GPU statistics
+- `GET /api/jobs` - List all jobs
+- `POST /api/jobs/submit` - Submit new job
+- `GET /api/jobs/{job_id}` - Get job status
+- `DELETE /api/jobs/{job_id}` - Cancel job
+
+---
+
+## 🗃️ Database Schema
+
+### Videos Table
+```sql
+CREATE TABLE videos (
+    id SERIAL PRIMARY KEY,
+    filename VARCHAR UNIQUE NOT NULL,
+    filepath VARCHAR NOT NULL,
+    size_bytes INTEGER,
+    size_mb FLOAT,
+    uploaded_at TIMESTAMP DEFAULT NOW(),
+    frames_extracted INTEGER DEFAULT 0
+);
+```
+
+### Annotations Table
+```sql
+CREATE TABLE annotations (
+    id SERIAL PRIMARY KEY,
+    video_id INTEGER REFERENCES videos(id),
+    frame_index INTEGER NOT NULL,
+    annotation_type VARCHAR NOT NULL,
+    data JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Users Table
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR UNIQUE NOT NULL,
+    email VARCHAR UNIQUE NOT NULL,
+    hashed_password VARCHAR NOT NULL,
+    is_admin INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_login TIMESTAMP
+);
+```
+
+### Jobs Table
+```sql
+CREATE TABLE jobs (
+    id SERIAL PRIMARY KEY,
+    job_id VARCHAR UNIQUE NOT NULL,
+    status VARCHAR DEFAULT 'queued',
+    task_type VARCHAR NOT NULL,
+    video_name VARCHAR,
+    gpu_id INTEGER DEFAULT 0,
+    parameters JSONB,
+    progress INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+```
+
+---
+
+## 🛠️ Development
+
+### Running Tests
+```bash
+# Backend tests
+cd backend
+pytest
+
+# Frontend tests
+cd frontend
+npm test
+```
+
+### Code Structure
+
+The backend follows a modular router pattern:
+- Each feature has its own router file
+- Database models are centralized
+- Authentication is handled via dependency injection
+- All routes are versioned (`/api/v1/`)
+
+### Adding New Features
+
+1. Create new router in `backend/api/v1/`
+2. Define SQLAlchemy models in `backend/models.py`
+3. Register router in `backend/main.py`
+4. Create React components in `frontend/src/`
+
+---
+
+## 🚧 Troubleshooting
 
 ### Backend won't start
-
-**Error:** `ModuleNotFoundError: No module named 'fastapi'`
-- **Solution:** Make sure virtual environment is activated: `source venv/bin/activate`
-
-**Error:** `Address already in use`
-- **Solution:** Port 8000 is busy. Kill the process or use a different port:
 ```bash
-  uvicorn main:app --reload --port 8001
+# Check if port 8000 is in use
+lsof -i :8000
+
+# Kill process if needed
+kill -9 <PID>
+
+# Ensure virtual environment is activated
+source venv/bin/activate
 ```
 
-### Frontend won't start
+### Database connection errors
+```bash
+# Check PostgreSQL is running
+brew services list
 
-**Error:** `npm: command not found`
-- **Solution:** Install Node.js from https://nodejs.org/
+# Restart PostgreSQL
+brew services restart postgresql@14
 
-**Error:** `CORS error` in browser console
-- **Solution:** Make sure backend is running and CORS middleware is enabled in `main.py`
+# Verify database exists
+psql -l | grep video_annotation_db
+```
 
-### Videos won't play
-
-**Error:** Video shows play button with line through it
-- **Solution:** 
-  1. Check that video file exists in `test_videos/`
-  2. Make sure backend is running
-  3. Try a smaller video file first (< 50MB)
+### Frontend can't connect to backend
+- Ensure backend is running on port 8000
+- Check CORS settings in `backend/main.py`
+- Verify API_BASE URL in `frontend/src/App.js`
 
 ### Frame extraction fails
+```bash
+# Install FFmpeg
+brew install ffmpeg
 
-**Error:** `FFmpeg error`
-- **Solution:** Install FFmpeg:
-  - Mac: `brew install ffmpeg`
-  - Ubuntu: `sudo apt install ffmpeg`
+# Verify installation
+ffmpeg -version
+```
 
-### GPU monitoring shows "not available"
+### GPU monitoring not working
+- NVIDIA GPU required
+- Install nvidia-ml-py: `pip install nvidia-ml-py`
+- Check GPU drivers are installed
 
-- **Solution:** This is normal if you don't have an NVIDIA GPU. The app still works - GPU features just won't show data.
+---
 
+## 📦 Dependencies
 
-## 📝 License
+### Backend
+- **FastAPI** - Modern web framework
+- **SQLAlchemy** - ORM for database
+- **PostgreSQL** - Production database
+- **python-jose** - JWT tokens
+- **pynvml** - GPU monitoring
+- **aiofiles** - Async file operations
+- **FFmpeg** - Video processing
 
-This project is for educational and research purposes.
+### Frontend
+- **React** - UI framework
+- **axios** - HTTP client
+- **CSS3** - Styling
 
-## 👤 Author
+---
 
-**Kelechi Anyanwu**
-- GitHub: [@Anyah11](https://github.com/Anyah11)
+## 🔮 Future Enhancements
+
+- [ ] Video upload interface
+- [ ] Real-time collaborative annotation
+- [ ] Advanced annotation tools (3D boxes, tracking)
+- [ ] Model training integration
+- [ ] Annotation quality metrics
+- [ ] Export to more formats (YOLO, Pascal VOC)
+- [ ] User activity logging
+- [ ] Admin dashboard with analytics
+- [ ] Mobile app support
+- [ ] Cloud deployment guides
+
+---
+
+## 📄 License
+
+MIT License - See LICENSE file for details
+
+---
+
+## 👥 Contributors
+
+**Kelechi Anyanwu** - Initial development
+
+**Supervisor**: Brendon Penner
+
+**Infrastructure**: Karlo
+
+---
 
 ## 🙏 Acknowledgments
 
-- Supervisor: Brendon Penner
-- Lab Infrastructure Support: Karlo
+Built for university research lab to enable efficient video annotation workflows for computer vision projects.
 
+---
+
+## 📞 Support
+
+For issues or questions:
+1. Check the troubleshooting section
+2. Review API documentation at http://localhost:8000/docs
+3. Contact the development team
+
+---
+
+## 🔄 Version History
+
+### v0.5.0 (Current)
+- ✅ User authentication system
+- ✅ JWT token-based security
+- ✅ Role-based access control
+
+### v0.4.0
+- ✅ Code modularization
+- ✅ Organized router structure
+- ✅ Improved maintainability
+
+### v0.3.0
+- ✅ PostgreSQL migration
+- ✅ Production database
+- ✅ Concurrent user support
+
+### v0.2.0
+- ✅ Async frame extraction
+- ✅ Real-time progress tracking
+- ✅ 12 video format support
+
+### v0.1.0
+- ✅ Initial release
+- ✅ Basic annotation tools
+- ✅ Video streaming
+- ✅ GPU monitoring
